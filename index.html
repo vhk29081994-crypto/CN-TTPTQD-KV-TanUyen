@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Demo thửa + ảnh vệ tinh (mặc định)</title>
+  <title>Demo KMZ (GPMB) + vệ tinh + tìm kiếm</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
@@ -18,8 +18,8 @@
 
     <div class="pillbar">
       <button class="pill active" data-tab="khuvuc">Khu vực</button>
-      <button class="pill" data-tab="diadiem">Địa điểm</button>
-      <button class="pill" data-tab="gocranh">Góc ranh</button>
+      <button class="pill" data-tab="doituong">Đối tượng</button>
+      <button class="pill" data-tab="gocranh">Đo nhanh</button>
       <button class="pill" data-tab="tothua">Tờ thửa</button>
     </div>
 
@@ -33,29 +33,39 @@
   <aside id="panel" class="panel">
     <div class="panel-header">
       <div>
-        <div class="panel-title">Lớp dữ liệu & Bộ lọc</div>
-        <div class="panel-sub">Mặc định nền vệ tinh + chữ (gần kiểu GG)</div>
+        <div class="panel-title">KMZ lên Web Map (Leaflet)</div>
+        <div class="panel-sub">Mặc định vệ tinh + chữ; có lớp GPMB (từ KMZ) + tìm kiếm</div>
       </div>
       <button id="btnClosePanel" class="iconbtn" title="Đóng">✖</button>
     </div>
 
     <div class="section">
       <div class="section-title">Nền bản đồ</div>
-      <label class="row"><input type="radio" name="basemap" id="rbSat" checked /> <span>Vệ tinh + chữ (Esri Imagery + Labels)</span></label>
-      <label class="row"><input type="radio" name="basemap" id="rbOSM" /> <span>Bản đồ (OSM)</span></label>
-      <div class="note">* Đây là nền vệ tinh miễn phí + lớp chữ tham chiếu để nhìn giống kiểu Google hơn.</div>
+      <label class="row"><input type="radio" name="basemap" id="rbSat" checked /> <span>Vệ tinh + chữ</span></label>
+      <label class="row"><input type="radio" name="basemap" id="rbOSM" /> <span>OSM</span></label>
     </div>
 
     <div class="section">
       <div class="section-title">Lớp dữ liệu</div>
-      <label class="row"><input type="checkbox" id="chkParcels" checked /> <span>Thửa đất (polygon)</span></label>
-      <label class="row"><input type="checkbox" id="chkPlanning" checked /> <span>Quy hoạch (polygon)</span></label>
-      <label class="row"><input type="checkbox" id="chkRoute" checked /> <span>Trục tuyến (line)</span></label>
-      <label class="row"><input type="checkbox" id="chkListings" checked /> <span>Tin rao (points)</span></label>
+      <label class="row"><input type="checkbox" id="chkGPMB" checked /> <span>GPMB (KMZ → GeoJSON mẫu)</span></label>
+      <label class="row"><input type="checkbox" id="chkParcels" /> <span>Thửa demo</span></label>
+      <label class="row"><input type="checkbox" id="chkPlanning" /> <span>Quy hoạch demo</span></label>
+      <label class="row"><input type="checkbox" id="chkRoute" /> <span>Trục tuyến demo</span></label>
+      <label class="row"><input type="checkbox" id="chkListings" /> <span>Tin rao demo</span></label>
+      <div class="note" id="gpmbStats">Đang tải lớp GPMB...</div>
     </div>
 
     <div class="section">
-      <div class="section-title">Tìm tờ/thửa</div>
+      <div class="section-title">Tìm kiếm đối tượng (GPMB)</div>
+      <div class="row">
+        <input id="inpObj" placeholder="Nhập tên/mã (trùng thì zoom cái đầu)" />
+        <button id="btnObjFind" class="pill">Tìm</button>
+      </div>
+      <div class="hint">Gợi ý: copy đúng “name” trong popup để tìm nhanh.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Tìm tờ/thửa (demo)</div>
       <div class="row">
         <input id="inpTo" placeholder="Số tờ" />
         <input id="inpThua" placeholder="Số thửa" />
@@ -65,22 +75,17 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Lọc giá (tỷ / m²)</div>
+      <div class="section-title">Lọc giá/diện tích (demo tin rao)</div>
+      <div class="note">Bật “Tin rao demo” để dùng slider.</div>
       <div id="priceSlider"></div>
       <div class="hint"><span id="priceMin"></span> → <span id="priceMax"></span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Lọc diện tích (m²)</div>
-      <div id="areaSlider"></div>
+      <div id="areaSlider" style="margin-top:10px;"></div>
       <div class="hint"><span id="areaMin"></span> → <span id="areaMax"></span></div>
     </div>
 
     <div class="section">
-      <div class="section-title">Góc ranh (demo)</div>
-      <div class="note">
-        Bấm 2 điểm để đo nhanh khoảng cách. Nếu muốn vẽ ranh thửa/đường bao, có thể thêm Leaflet.draw (miễn phí).
-      </div>
+      <div class="section-title">Đo nhanh (2 điểm)</div>
+      <div class="note">Bấm 2 điểm bất kỳ để đo khoảng cách. Bấm tiếp để đo cặp mới.</div>
     </div>
   </aside>
 

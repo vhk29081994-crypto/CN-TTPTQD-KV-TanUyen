@@ -1,20 +1,15 @@
-# Demo thửa + ảnh vệ tinh (mặc định)
+# Demo đưa KMZ lên Web Map (Leaflet)
 
-## Chạy local (miễn phí)
-Cách 1 (Python):
-  python -m http.server 5173
+## Vì sao file KMZ lớn không nên đưa thẳng lên web?
+KMZ bạn gửi có dung lượng rất lớn (KML bên trong ~ vài trăm MB). Nếu convert thẳng sang GeoJSON rồi load trên trình duyệt:
+- rất chậm / treo máy
+- tốn băng thông khi chia sẻ nhiều người
+=> Cách đúng khi làm thật: chuyển sang Vector Tiles (PMTiles) để tải theo từng vùng/zoom.
+
+## Bản demo này là gì?
+- Mình đã trích ra 5.000 đối tượng (sample) từ KMZ và chuyển sang GeoJSON: data/gpmb_sample.geojson
+- Web map mặc định nền vệ tinh + chữ, có lớp GPMB (sample) + ô tìm kiếm theo 'name'
+
+## Chạy local
+python -m http.server 5173
 Mở: http://localhost:5173
-
-Cách 2 (Node):
-  npx serve
-
-## Điểm nổi bật
-- Mặc định nền vệ tinh + chữ (Esri Imagery + Labels) để nhìn giống kiểu Google hơn.
-- Thửa đất viền trắng để nổi trên nền vệ tinh (hover/click có popup).
-- Có tìm tờ/thửa, bật/tắt lớp, lọc tin rao.
-
-## Thay dữ liệu
-- data/parcels.geojson: thửa (polygon) + so_to, so_thua, dien_tich, loai_dat, ghi_chu
-- data/planning.geojson: quy hoạch (polygon)
-- data/route.geojson: trục tuyến (line)
-- data/listings.geojson: tin rao (points)

@@ -1,6 +1,7 @@
-// Demo: MẶC ĐỊNH nền vệ tinh + chữ (gần kiểu GG) + thửa + quy hoạch + tuyến + tin rao
+// Demo: đưa KMZ lên web map bằng cách chuyển KMZ -> GeoJSON (ở đây là file mẫu gpmb_sample.geojson)
+// Lưu ý: KMZ bạn gửi rất lớn (hàng trăm MB) => cần vector tiles/PMTiles để chạy mượt khi làm thật.
 
-const map = L.map('map', { zoomControl: true }).setView([10.7925, 106.664], 14);
+const map = L.map('map', { zoomControl: true }).setView([10.7925, 106.664], 13);
 
 // ===== Base maps =====
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -12,7 +13,6 @@ const esriImagery = L.tileLayer(
   { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
 );
 
-// Lớp chữ (labels) để nhìn giống GG hơn
 const esriLabels = L.tileLayer(
   'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
   { maxZoom: 19, attribution: 'Labels &copy; Esri' }
@@ -32,7 +32,7 @@ function toast(msg){
   el.textContent = msg;
   el.hidden = false;
   clearTimeout(toast._t);
-  toast._t = setTimeout(()=>{ el.hidden = true; }, 2500);
+  toast._t = setTimeout(()=>{ el.hidden = true; }, 2600);
 }
 
 async function loadJSON(url){
@@ -43,11 +43,23 @@ async function loadJSON(url){
 
 // ===== Layers =====
 let parcelsLayer, planningLayer, routeLayer;
+let gpmbLayer;
 let clusterLayer;
 let allListings = [];
 const parcelIndex = new Map();
+const objIndex = new Map(); // name->layer OR name->[layers]
 
-// ===== Marker badge CSS =====
+function pushIndex(key, layer){
+  if(!key) return;
+  const k = key.trim().toLowerCase();
+  if(!k) return;
+  const cur = objIndex.get(k);
+  if(!cur) objIndex.set(k, layer);
+  else if(Array.isArray(cur)) cur.push(layer);
+  else objIndex.set(k, [cur, layer]);
+}
+
+// ===== Marker badge CSS (demo tin rao) =====
 const style = document.createElement('style');
 style.textContent = `
 .price-badge .badge{
@@ -92,7 +104,6 @@ function bindListingPopup(feature, layer){
 function planningStyle(f){
   return { color:'#f5f5f5', weight:1, fillColor: f.properties.color || '#ff66cc', fillOpacity: 0.22 };
 }
-
 function onEachPlanning(f, layer){
   const p = f.properties || {};
   layer.bindPopup(`<b>${p.name || 'Quy hoạch'}</b><br/>Kế hoạch: ${p.plan || '-'}<br/>Loại: ${p.zone || '-'}`);
@@ -101,47 +112,62 @@ function onEachPlanning(f, layer){
 function routeStyle(f){
   return { color: f.properties?.color || '#00ff00', weight: f.properties?.width || 5 };
 }
-
 function onEachRoute(f, layer){
   layer.bindPopup(`<b>${f.properties?.name || 'Trục tuyến'}</b>`);
 }
 
 // Viền thửa nổi trên nền vệ tinh
 function parcelStyle(){
-  return {
-    color:'#ffffff',
-    weight:2,
-    opacity:0.95,
-    fillColor:'#00aaff',
-    fillOpacity: 0.10
-  };
+  return { color:'#ffffff', weight:2, opacity:0.95, fillColor:'#00aaff', fillOpacity: 0.10 };
 }
-
 function onEachParcel(feature, layer){
   const p = feature.properties || {};
   const key = `${p.so_to || ''}-${p.so_thua || ''}`.trim();
   if(key && key !== '-') parcelIndex.set(key, layer);
-
   layer.bindPopup(
     `<b>Thửa ${p.so_thua || ''} - Tờ ${p.so_to || ''}</b><br/>
      Diện tích: <b>${p.dien_tich || ''}</b> m²<br/>
      Loại đất: <b>${p.loai_dat || ''}</b><br/>
      Ghi chú: ${p.ghi_chu || '-'}`
   );
-
   layer.on('mouseover', () => layer.setStyle({ weight: 4, fillOpacity: 0.18 }));
   layer.on('mouseout', () => layer.setStyle({ weight: 2, fillOpacity: 0.10 }));
-  layer.on('click', () => {
-    try { map.fitBounds(layer.getBounds(), { maxZoom: 18 }); } catch(e){}
-  });
 }
 
-// ===== Filters =====
+// ===== GPMB layer (from KMZ sample) =====
+function gpmbStyle(feature){
+  const t = feature.geometry?.type;
+  if(t === 'LineString' || t === 'MultiLineString') return { color:'#ff3b3b', weight: 3, opacity: 0.9 };
+  if(t === 'Point') return { };
+  // Polygon
+  return { color:'#ffd000', weight: 2, opacity: 0.95, fillColor:'#ffd000', fillOpacity: 0.06 };
+}
+
+function gpmbPointToLayer(feature, latlng){
+  return L.circleMarker(latlng, { radius: 6, weight:2, opacity: 0.95, fillOpacity: 0.3 });
+}
+
+function onEachGPMB(feature, layer){
+  const p = feature.properties || {};
+  const name = p.name || p.id || p.code || 'Đối tượng';
+  pushIndex(name, layer);
+
+  // popup show up to 12 fields
+  const keys = Object.keys(p);
+  const rows = keys.slice(0, 12).map(k => `<div><b>${k}</b>: ${String(p[k])}</div>`).join('');
+  layer.bindPopup(`<b>${name}</b><br/><div style="margin-top:6px">${rows}</div>`);
+
+  layer.on('mouseover', ()=>{ if(layer.setStyle) layer.setStyle({ weight: 4 }); });
+  layer.on('mouseout', ()=>{ if(layer.setStyle) layer.setStyle({ weight: 2 }); });
+}
+
+// ===== Filters (demo tin rao) =====
 let priceRange = [0.06, 0.25];
 let areaRange = [50, 250];
 
 function applyFilters(){
-  if(clusterLayer) clusterLayer.clearLayers();
+  if(!clusterLayer) return;
+  clusterLayer.clearLayers();
 
   const filtered = allListings.filter(f => {
     const p = f.properties;
@@ -195,8 +221,6 @@ let measurePts = [];
 let measureLine;
 map.on('click', (e) => {
   const {lat, lng} = e.latlng;
-  toast(`Tọa độ: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-
   measurePts.push([lat, lng]);
   if(measurePts.length > 2) measurePts = [measurePts[1], measurePts[2]];
 
@@ -210,26 +234,42 @@ map.on('click', (e) => {
 
 // ===== Init =====
 (async function init(){
+  // GPMB (KMZ sample) - bật mặc định
+  const gpmb = await loadJSON('./data/gpmb_sample.geojson');
+  gpmbLayer = L.geoJSON(gpmb, { style: gpmbStyle, pointToLayer: gpmbPointToLayer, onEachFeature: onEachGPMB }).addTo(map);
+
+  const c = gpmb.properties?._counts;
+  const statsEl = document.getElementById('gpmbStats');
+  if(c){
+    statsEl.textContent = `GPMB: ${gpmb.features.length.toLocaleString()} đối tượng (sample). Polygon: ${c.Polygon || 0}, Line: ${c.LineString || 0}, Point: ${c.Point || 0}`;
+  } else {
+    statsEl.textContent = `GPMB: ${gpmb.features.length.toLocaleString()} đối tượng (sample)`;
+  }
+
+  // Demo layers (tắt mặc định để nhẹ)
   const parcels = await loadJSON('./data/parcels.geojson');
-  parcelsLayer = L.geoJSON(parcels, { style: parcelStyle, onEachFeature: onEachParcel }).addTo(map);
+  parcelsLayer = L.geoJSON(parcels, { style: parcelStyle, onEachFeature: onEachParcel });
 
   const planning = await loadJSON('./data/planning.geojson');
-  planningLayer = L.geoJSON(planning, { style: planningStyle, onEachFeature: onEachPlanning }).addTo(map);
+  planningLayer = L.geoJSON(planning, { style: planningStyle, onEachFeature: onEachPlanning });
 
   const route = await loadJSON('./data/route.geojson');
-  routeLayer = L.geoJSON(route, { style: routeStyle, onEachFeature: onEachRoute }).addTo(map);
+  routeLayer = L.geoJSON(route, { style: routeStyle, onEachFeature: onEachRoute });
 
   const listings = await loadJSON('./data/listings.geojson');
   allListings = listings.features;
-
-  clusterLayer = L.markerClusterGroup({ showCoverageOnHover:false, disableClusteringAtZoom: 18 }).addTo(map);
+  clusterLayer = L.markerClusterGroup({ showCoverageOnHover:false, disableClusteringAtZoom: 18 });
 
   setupSliders(allListings);
-  applyFilters();
 
-  try { map.fitBounds(parcelsLayer.getBounds(), { padding:[20,20], maxZoom: 16 }); } catch(e){}
+  // Fit view to gpmb
+  try { map.fitBounds(gpmbLayer.getBounds(), { padding:[20,20], maxZoom: 16 }); } catch(e){}
 
-  // layer toggles
+  // Layer toggles
+  document.getElementById('chkGPMB').addEventListener('change', (e)=>{
+    if(e.target.checked) gpmbLayer.addTo(map); else map.removeLayer(gpmbLayer);
+  });
+
   document.getElementById('chkParcels').addEventListener('change', (e)=>{
     if(e.target.checked) parcelsLayer.addTo(map); else map.removeLayer(parcelsLayer);
   });
@@ -240,10 +280,10 @@ map.on('click', (e) => {
     if(e.target.checked) routeLayer.addTo(map); else map.removeLayer(routeLayer);
   });
   document.getElementById('chkListings').addEventListener('change', (e)=>{
-    if(e.target.checked) clusterLayer.addTo(map); else map.removeLayer(clusterLayer);
+    if(e.target.checked){ clusterLayer.addTo(map); applyFilters(); } else map.removeLayer(clusterLayer);
   });
 
-  // basemap radios
+  // Basemap toggles
   const rbOSM = document.getElementById('rbOSM');
   const rbSat = document.getElementById('rbSat');
 
@@ -254,7 +294,6 @@ map.on('click', (e) => {
       if(!map.hasLayer(osm)) osm.addTo(map);
     }
   });
-
   rbSat.addEventListener('change', ()=>{
     if(rbSat.checked){
       if(map.hasLayer(osm)) map.removeLayer(osm);
@@ -263,7 +302,7 @@ map.on('click', (e) => {
     }
   });
 
-  // find parcel
+  // Find parcel
   document.getElementById('btnFind').onclick = ()=>{
     const to = (document.getElementById('inpTo').value || '').trim();
     const thua = (document.getElementById('inpThua').value || '').trim();
@@ -272,6 +311,18 @@ map.on('click', (e) => {
     if(!layer){ toast('Không tìm thấy (demo: thử tờ 12/13/21 và thửa 100-111)'); return; }
     map.fitBounds(layer.getBounds(), { maxZoom: 18 });
     layer.openPopup();
+  };
+
+  // Find object (GPMB)
+  document.getElementById('btnObjFind').onclick = ()=>{
+    const q = (document.getElementById('inpObj').value || '').trim().toLowerCase();
+    if(!q){ toast('Nhập từ khóa'); return; }
+    const hit = objIndex.get(q);
+    if(!hit){ toast('Không tìm thấy đối tượng'); return; }
+    const layer = Array.isArray(hit) ? hit[0] : hit;
+    try { map.fitBounds(layer.getBounds(), { maxZoom: 18 }); } catch(e){ try { map.setView(layer.getLatLng(), 18); } catch(e2){} }
+    layer.openPopup();
+    if(Array.isArray(hit)) toast(`Có ${hit.length} đối tượng trùng tên, đang zoom cái đầu`);
   };
 })().catch(err => {
   console.error(err);
